@@ -2,25 +2,35 @@
 retriever_agent.py
 خطوة 2: Retriever Agent - يبحث بالـ Vector DB ويرجع أفضل الأدلة
 تحديث: استخدام OpenRouter API بدلاً من Ollama المحلي
+
+FastAPI wiring note: the only change from the original version is the
+"الإعدادات" section below - paths and API keys now come from environment
+variables (loaded from .env) instead of being hardcoded, so the same code
+works from any working directory and doesn't ship a secret in the file.
 """
 
+import os
 import pickle
+
 import numpy as np
 import faiss
+from dotenv import load_dotenv
 from openai import OpenAI
 from sentence_transformers import SentenceTransformer, CrossEncoder
 from rank_bm25 import BM25Okapi
 
+load_dotenv()
 
 # ------------------ الإعدادات ------------------
-INDEX_PATH = "./vector_store.index"
-METADATA_PATH = "./metadata.pkl"
-EMBEDDING_MODEL = "intfloat/multilingual-e5-base"
-RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+DATA_DIR = os.getenv("DATA_DIR", "./data")
+INDEX_PATH = os.path.join(DATA_DIR, "vector_store.index")
+METADATA_PATH = os.path.join(DATA_DIR, "metadata.pkl")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "intfloat/multilingual-e5-base")
+RERANKER_MODEL = os.getenv("RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
 
 # إعدادات OpenRouter
-OPENROUTER_API_KEY = "api-key"  # ضع مفتاح OpenRouter الخاص بك هنا
-OPENROUTER_MODEL = "openai/gpt-4o-mini"              # أو يمكنك استخدام "meta-llama/llama-3.1-8b-instruct"
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
 
 TOP_K_INITIAL = 20     # عدد النتائج من البحث الأولي
 TOP_K_FINAL = 6        # عدد النتائج بعد الـ Reranking

@@ -4,9 +4,9 @@ orchestrator.py
 Retriever Agent -> Analyst Agent -> Answer Agent
 """
 
-from retriever_agent import RetrieverAgent
-from analyst_agent import AnalystAgent
-from answer_agent import AnswerAgent
+from .agents.retriever_agent import RetrieverAgent
+from .agents.analyst_agent import AnalystAgent
+from .agents.answer_agent import AnswerAgent
 
 
 class Orchestrator:
@@ -47,6 +47,8 @@ class Orchestrator:
         return answer
 
 
+# ------------------ التشغيل المستقل (بدون FastAPI) ------------------
+# للتجربة السريعة من التيرمنال: python -m app.orchestrator
 if __name__ == "__main__":
     orchestrator = Orchestrator()
 

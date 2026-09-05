@@ -1,5 +1,5 @@
 from langchain_openai import ChatOpenAI
-from langgraph.graph  import StateGraph, START, END
+from langgraph.graph import StateGraph, START, END
 from typing_extensions import TypedDict
 from dotenv import load_dotenv
 import os
@@ -11,16 +11,15 @@ load_dotenv()
 API_KEY = os.getenv("API_KEY")
 
 
-#fist step define the state 
+# fist step define the state
 class simpleState(TypedDict):
     question: str
-    evidence: list #— the chunks (with source, page, text)
-    analysis: str #— from AnalystAgent.analyze()["analysis"]
-    calculations: list #— from AnalystAgent.analyze()["calculations"]
-    citations:list #— filled in by the Citation Formatter node
-    sources: list #— filled in by the Source Formatter node
-    final_answer: str #— filled in by the Response Formatter node, this is what you return
-
+    evidence: list  # — the chunks (with source, page, text)
+    analysis: str  # — from AnalystAgent.analyze()["analysis"]
+    calculations: list  # — from AnalystAgent.analyze()["calculations"]
+    citations: list  # — filled in by the Citation Formatter node
+    sources: list  # — filled in by the Source Formatter node
+    final_answer: str  # — filled in by the Response Formatter node, this is what you return
 
 
 class AnswerAgent:
@@ -32,7 +31,7 @@ class AnswerAgent:
             api_key=API_KEY,
         )
 
-        #the three formatter nodes 
+        # the three formatter nodes
         def citation_formatter(State: simpleState) -> dict:
             # Format the citations
             # build one short tag per unique (source, page) pair found in the evidence
@@ -90,25 +89,24 @@ class AnswerAgent:
             response = self.client.invoke(prompt)
             return {"final_answer": response.content.strip()}
 
-        #step 2 create the graph 
+        # step 2 create the graph
         graph = StateGraph(simpleState)
 
-        #step 3 add the nodes
+        # step 3 add the nodes
         graph.add_node("citation_formatter", citation_formatter)
         graph.add_node("source_formatter", source_formatter)
         graph.add_node("response_formatter", response_formatter)
 
-
-        #step 4 add edges
-        graph.add_edge(START,"citation_formatter")
+        # step 4 add edges
+        graph.add_edge(START, "citation_formatter")
         graph.add_edge("citation_formatter", "response_formatter")
         graph.add_edge("response_formatter", END)
 
-        graph.add_edge(START,"source_formatter")
+        graph.add_edge(START, "source_formatter")
         graph.add_edge("source_formatter", "response_formatter")
         graph.add_edge("response_formatter", END)
 
-        #step 5 compile
+        # step 5 compile
         self.app = graph.compile()
 
     def generate(self, question, analysis_result):

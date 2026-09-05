@@ -2,16 +2,23 @@
 analyst_agent.py
 خطوة 3: Analyst Agent - يحلل الأدلة المسترجعة من Retriever Agent
 يعتمد على retriever_agent.py (RetrieverAgent) للـ feedback loop
+
+FastAPI wiring note: same change as retriever_agent.py - config now comes
+from environment variables instead of a hardcoded placeholder key.
 """
 
+import os
 import re
 import json
+
+from dotenv import load_dotenv
 from openai import OpenAI
 
+load_dotenv()
 
 # ------------------ الإعدادات ------------------
-OPENROUTER_API_KEY = "api-key" # ضع مفتاح OpenRouter الحقيقي هنا (نفسه المستخدم بـ retriever_agent.py)
-OPENROUTER_MODEL = "openai/gpt-4o-mini"
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
 
 MAX_FEEDBACK_LOOPS = 2  # أقصى عدد مرات يرجع فيها يطلب أدلة إضافية
 
