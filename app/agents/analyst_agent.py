@@ -13,6 +13,7 @@ import json
 
 from dotenv import load_dotenv
 from openai import OpenAI
+from langsmith.wrappers import wrap_openai
 
 load_dotenv()
 
@@ -29,10 +30,10 @@ class AnalystAgent:
         retriever_agent: كائن RetrieverAgent (من retriever_agent.py)
         لازم يكون موجود عشان يشتغل الـ Feedback Loop (أداة Search/Retrieve More Evidence)
         """
-        self.client = OpenAI(
+        self.client = wrap_openai(OpenAI(
             base_url="https://openrouter.ai/api/v1",
             api_key=OPENROUTER_API_KEY,
-        )
+        ))
         self.retriever = retriever_agent
 
     # ---------- استدعاء LLM مساعد ----------

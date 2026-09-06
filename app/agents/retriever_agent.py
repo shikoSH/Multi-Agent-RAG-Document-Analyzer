@@ -16,6 +16,7 @@ import numpy as np
 import faiss
 from dotenv import load_dotenv
 from openai import OpenAI
+from langsmith.wrappers import wrap_openai
 from sentence_transformers import SentenceTransformer, CrossEncoder
 from rank_bm25 import BM25Okapi
 
@@ -48,10 +49,12 @@ class RetrieverAgent:
         self.reranker = CrossEncoder(RERANKER_MODEL)
 
         # تجهيز عميل OpenRouter
-        self.client = OpenAI(
+        # wrap_openai makes every call show up in LangSmith automatically -
+        # no other code changes needed, it's a drop-in wrapper.
+        self.client = wrap_openai(OpenAI(
             base_url="https://openrouter.ai/api/v1",
             api_key=OPENROUTER_API_KEY,
-        )
+        ))
 
         # تجهيز BM25 للـ Keyword Search
         tokenized_corpus = [c["text"].split() for c in self.chunks]

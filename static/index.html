@@ -20,6 +20,7 @@
     --brass:      #C6923F;
     --brass-dim:  #7C6636;
     --error:      #C6603F;
+    --rec:        #D4574A;
   }
 
   * { box-sizing: border-box; }
@@ -115,12 +116,13 @@
   }
   .empty-state p { font-size: 0.92rem; line-height: 1.6; margin: 0; }
 
-  .row {
+  .message-block {
     display: flex;
+    flex-direction: column;
     max-width: 100%;
   }
-  .row.user     { justify-content: flex-end; }
-  .row.assistant{ justify-content: flex-start; }
+  .message-block.user     { align-items: flex-end; }
+  .message-block.assistant{ align-items: flex-start; }
 
   .bubble {
     max-width: min(640px, 82%);
@@ -150,9 +152,24 @@
     color: #E9C6B8;
   }
 
-  /* right-to-left detection swaps which side reads as "the citation margin" */
   .bubble[dir="rtl"].user     { border-inline-end: none; border-inline-start: 3px solid var(--brass); }
   .bubble[dir="rtl"].assistant{ border-inline-start: none; border-inline-end: 3px solid var(--brass); }
+
+  .report-link {
+    margin-top: 6px;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    transition: color 0.15s;
+  }
+  .report-link:hover { color: var(--brass); }
+  .report-link:disabled { opacity: 0.5; cursor: default; }
 
   .typing {
     display: inline-flex;
@@ -177,10 +194,65 @@
   #composer {
     flex-shrink: 0;
     border-top: 1px solid var(--hairline);
-    padding: 16px clamp(16px, 4vw, 48px) 20px;
+    padding: 12px clamp(16px, 4vw, 48px) 18px;
+  }
+
+  #attachment-preview {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    background: var(--panel);
+    border: 1px solid var(--hairline);
+    border-radius: 4px;
+    padding: 6px 10px;
+    margin-bottom: 8px;
+    width: fit-content;
+  }
+  #attachment-preview.visible { display: flex; }
+  #attachment-preview button {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.9rem;
+    line-height: 1;
+    padding: 0;
+  }
+  #attachment-preview button:hover { color: var(--error); }
+
+  #composer-row {
     display: flex;
-    gap: 10px;
+    gap: 8px;
     align-items: flex-end;
+  }
+
+  .icon-btn {
+    background: var(--panel);
+    border: 1px solid var(--hairline);
+    color: var(--text-muted);
+    width: 42px;
+    height: 42px;
+    flex-shrink: 0;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 1.05rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+  }
+  .icon-btn:hover { border-color: var(--brass-dim); color: var(--brass); }
+  .icon-btn.recording {
+    background: rgba(212, 87, 74, 0.15);
+    border-color: var(--rec);
+    color: var(--rec);
+    animation: recpulse 1.2s infinite;
+  }
+  @keyframes recpulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(212, 87, 74, 0.4); }
+    50% { box-shadow: 0 0 0 6px rgba(212, 87, 74, 0); }
   }
 
   #question {
@@ -208,7 +280,8 @@
     font-family: inherit;
     font-weight: 600;
     font-size: 0.9rem;
-    padding: 12px 20px;
+    padding: 0 20px;
+    height: 42px;
     border-radius: 4px;
     cursor: pointer;
     transition: background 0.15s, opacity 0.15s;
@@ -243,24 +316,40 @@
 <div id="thread">
   <div class="empty-state" id="empty-state">
     <div class="mark">?</div>
-    <p>Ask a question about your documents to get started. Answers are grounded in the retrieved passages, with sources listed at the end.</p>
+    <p>Ask a question about your documents to get started — by typing, by voice, or by uploading a photo of a page. Answers are grounded in the retrieved passages, with sources listed at the end.</p>
   </div>
 </div>
 
-<form id="composer">
-  <textarea id="question" rows="1" placeholder="Ask about your documents…" autofocus></textarea>
-  <button id="send-btn" type="submit">Send</button>
-</form>
+<div id="composer">
+  <div id="attachment-preview">
+    <span id="attachment-label"></span>
+    <button id="attachment-clear" type="button" title="Remove">✕</button>
+  </div>
+
+  <form id="composer-row">
+    <button id="mic-btn" class="icon-btn" type="button" title="Ask by voice">🎤</button>
+    <button id="image-btn" class="icon-btn" type="button" title="Upload a photo (OCR)">📎</button>
+    <input id="image-input" type="file" accept="image/*" hidden />
+    <textarea id="question" rows="1" placeholder="Ask about your documents…" autofocus></textarea>
+    <button id="send-btn" type="submit">Send</button>
+  </form>
+</div>
 
 <footer>Multi-Agent RAG Document Analyzer</footer>
 
 <script>
   const thread = document.getElementById("thread");
   const emptyState = document.getElementById("empty-state");
-  const form = document.getElementById("composer");
+  const form = document.getElementById("composer-row");
   const input = document.getElementById("question");
   const sendBtn = document.getElementById("send-btn");
   const resetBtn = document.getElementById("reset-btn");
+  const micBtn = document.getElementById("mic-btn");
+  const imageBtn = document.getElementById("image-btn");
+  const imageInput = document.getElementById("image-input");
+  const attachmentPreview = document.getElementById("attachment-preview");
+  const attachmentLabel = document.getElementById("attachment-label");
+  const attachmentClear = document.getElementById("attachment-clear");
 
   const ARABIC_RE = /[\u0600-\u06FF]/;
 
@@ -268,34 +357,88 @@
     return ARABIC_RE.test(text) ? "rtl" : "ltr";
   }
 
-  function addMessage(role, text) {
-    emptyState.remove();
+  function clearAttachmentPreview() {
+    attachmentPreview.classList.remove("visible");
+    attachmentLabel.textContent = "";
+  }
 
-    const row = document.createElement("div");
-    row.className = `row ${role}`;
+  function showAttachmentPreview(label) {
+    attachmentLabel.textContent = label;
+    attachmentPreview.classList.add("visible");
+  }
+
+  function insertIntoQuestion(text) {
+    if (!text) return;
+    input.value = input.value.trim() ? `${input.value.trim()} ${text}` : text;
+    input.style.height = "auto";
+    input.style.height = Math.min(input.scrollHeight, 160) + "px";
+    input.focus();
+  }
+
+  function addUserMessage(text) {
+    emptyState.remove();
+    const block = document.createElement("div");
+    block.className = "message-block user";
 
     const bubble = document.createElement("div");
-    bubble.className = `bubble ${role}`;
+    bubble.className = "bubble user";
     bubble.dir = detectDir(text);
     bubble.textContent = text;
 
-    row.appendChild(bubble);
-    thread.appendChild(row);
+    block.appendChild(bubble);
+    thread.appendChild(block);
     thread.scrollTop = thread.scrollHeight;
-    return bubble;
+  }
+
+  function addAssistantMessage(text, entryId) {
+    emptyState.remove();
+    const block = document.createElement("div");
+    block.className = "message-block assistant";
+
+    const bubble = document.createElement("div");
+    bubble.className = "bubble assistant";
+    bubble.dir = detectDir(text);
+    bubble.textContent = text;
+    block.appendChild(bubble);
+
+    if (entryId != null) {
+      const reportBtn = document.createElement("button");
+      reportBtn.className = "report-link";
+      reportBtn.type = "button";
+      reportBtn.textContent = "📄 Download PDF report";
+      reportBtn.addEventListener("click", () => downloadReport(entryId, reportBtn));
+      block.appendChild(reportBtn);
+    }
+
+    thread.appendChild(block);
+    thread.scrollTop = thread.scrollHeight;
+  }
+
+  function addErrorMessage(text) {
+    emptyState.remove();
+    const block = document.createElement("div");
+    block.className = "message-block assistant";
+
+    const bubble = document.createElement("div");
+    bubble.className = "bubble error";
+    bubble.textContent = text;
+    block.appendChild(bubble);
+
+    thread.appendChild(block);
+    thread.scrollTop = thread.scrollHeight;
   }
 
   function addTypingIndicator() {
-    const row = document.createElement("div");
-    row.className = "row assistant";
-    row.id = "typing-row";
+    const block = document.createElement("div");
+    block.className = "message-block assistant";
+    block.id = "typing-row";
 
     const bubble = document.createElement("div");
     bubble.className = "bubble assistant";
     bubble.innerHTML = '<span class="typing"><span></span><span></span><span></span></span>';
 
-    row.appendChild(bubble);
-    thread.appendChild(row);
+    block.appendChild(bubble);
+    thread.appendChild(block);
     thread.scrollTop = thread.scrollHeight;
   }
 
@@ -303,8 +446,21 @@
     document.getElementById("typing-row")?.remove();
   }
 
+  function downloadReport(entryId, btn) {
+    btn.disabled = true;
+    const original = btn.textContent;
+    btn.textContent = "Building report…";
+    // Opening in a new tab triggers the browser's normal PDF download/
+    // preview behavior - no extra fetch/blob handling needed.
+    window.open(`/api/report/${entryId}`, "_blank");
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.textContent = original;
+    }, 1500);
+  }
+
   async function sendQuestion(question) {
-    addMessage("user", question);
+    addUserMessage(question);
     addTypingIndicator();
     sendBtn.disabled = true;
 
@@ -319,15 +475,15 @@
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        addMessage("error", body.detail || `Request failed (${res.status}).`);
+        addErrorMessage(body.detail || `Request failed (${res.status}).`);
         return;
       }
 
       const data = await res.json();
-      addMessage("assistant", data.answer);
+      addAssistantMessage(data.answer, data.id);
     } catch (err) {
       removeTypingIndicator();
-      addMessage("error", "Couldn't reach the server. Is it running?");
+      addErrorMessage("Couldn't reach the server. Is it running?");
     } finally {
       sendBtn.disabled = false;
     }
@@ -342,7 +498,6 @@
     sendQuestion(question);
   });
 
-  // Enter sends, Shift+Enter adds a newline.
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -350,7 +505,6 @@
     }
   });
 
-  // Auto-grow the textarea as the person types.
   input.addEventListener("input", () => {
     input.style.height = "auto";
     input.style.height = Math.min(input.scrollHeight, 160) + "px";
@@ -359,13 +513,102 @@
   resetBtn.addEventListener("click", async () => {
     try {
       await fetch("/api/reset", { method: "POST" });
-    } catch (_) {
-      // even if the server call fails, still clear the visible thread
-    }
+    } catch (_) {}
     thread.innerHTML = "";
     thread.appendChild(emptyState);
     input.focus();
   });
+
+  // ---------------- Voice query ----------------
+  // Uses the browser's own speech recognition (Web Speech API) - free,
+  // no API key, no server round-trip. Supported in Chrome/Edge; not in
+  // Firefox, which doesn't implement this API.
+  // Recognized speech lands in the question box for you to review (and
+  // edit) before sending - it never auto-sends.
+  const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition = null;
+  let isRecording = false;
+
+  if (SpeechRecognitionAPI) {
+    recognition = new SpeechRecognitionAPI();
+    recognition.lang = "ar-EG";       // change to "en-US" if you mostly ask in English
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      insertIntoQuestion(transcript);
+    };
+
+    recognition.onerror = (event) => {
+      if (event.error === "not-allowed") {
+        addErrorMessage("Microphone access was denied.");
+      } else if (event.error !== "no-speech") {
+        addErrorMessage(`Voice recognition error: ${event.error}`);
+      }
+    };
+
+    recognition.onend = () => {
+      isRecording = false;
+      micBtn.classList.remove("recording");
+      micBtn.title = "Ask by voice";
+    };
+  } else {
+    micBtn.disabled = true;
+    micBtn.title = "Voice input isn't supported in this browser (try Chrome or Edge)";
+  }
+
+  micBtn.addEventListener("click", () => {
+    if (!recognition) return;
+
+    if (isRecording) {
+      recognition.stop();
+      return;
+    }
+
+    isRecording = true;
+    micBtn.classList.add("recording");
+    micBtn.title = "Listening… click to stop";
+    recognition.start();
+  });
+
+  // ---------------- Image OCR ----------------
+  // Lets you upload a photo of a page; the server runs OCR on it and the
+  // extracted text lands in the question box, same as voice - review and
+  // edit before sending.
+  imageBtn.addEventListener("click", () => imageInput.click());
+
+  imageInput.addEventListener("change", async () => {
+    const file = imageInput.files[0];
+    if (!file) return;
+
+    showAttachmentPreview(`Reading text from ${file.name}…`);
+
+    const formData = new FormData();
+    formData.append("image", file);
+
+    try {
+      const res = await fetch("/api/ocr", { method: "POST", body: formData });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        addErrorMessage(body.detail || "Couldn't read text from that image.");
+        return;
+      }
+      const data = await res.json();
+      if (data.text) {
+        insertIntoQuestion(data.text);
+        showAttachmentPreview(`Text extracted from ${file.name}`);
+      } else {
+        showAttachmentPreview(`No text found in ${file.name}`);
+      }
+    } catch (err) {
+      addErrorMessage("Couldn't reach the server to read that image.");
+    } finally {
+      imageInput.value = "";
+    }
+  });
+
+  attachmentClear.addEventListener("click", clearAttachmentPreview);
 </script>
 
 </body>

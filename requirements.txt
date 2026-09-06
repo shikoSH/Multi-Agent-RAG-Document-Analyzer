@@ -2,6 +2,7 @@ fastapi
 uvicorn[standard]
 python-dotenv
 pydantic
+python-multipart
 
 openai
 sentence-transformers
@@ -12,6 +13,16 @@ numpy
 langchain-text-splitters
 langchain-openai
 langgraph
+langsmith
 
 pymupdf
 python-docx
+
+# OCR (image upload feature)
+pytesseract
+Pillow
+
+# PDF report generation
+reportlab
+arabic-reshaper
+python-bidi

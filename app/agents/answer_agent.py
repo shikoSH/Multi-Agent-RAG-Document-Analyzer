@@ -7,8 +7,10 @@ import os
 
 load_dotenv()
 
-
-API_KEY = os.getenv("API_KEY")
+# Runs through OpenRouter instead of OpenAI directly, so it uses the same
+# key as the Retriever/Analyst agents - no separate OpenAI key needed.
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
 
 
 # fist step define the state
@@ -25,10 +27,11 @@ class simpleState(TypedDict):
 class AnswerAgent:
     def __init__(self):
         self.client = ChatOpenAI(
-            model_name="gpt-4o-mini",
+            model_name=OPENROUTER_MODEL,
             temperature=0,
             max_tokens=2000,
-            api_key=API_KEY,
+            api_key=OPENROUTER_API_KEY,
+            base_url="https://openrouter.ai/api/v1",
         )
 
         # the three formatter nodes

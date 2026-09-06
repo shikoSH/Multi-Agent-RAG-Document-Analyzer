@@ -5,33 +5,45 @@ FastAPI backend for the Multi-Agent RAG Document Analyzer.
 Run from the project root with:
     uvicorn app.main:app --reload
 
-It does three things:
-1. Loads the Orchestrator (and therefore the embedding + reranker models)
-   exactly once, when the server starts - not on every request, since
-   that would be far too slow.
-2. Exposes a small JSON API (/api/chat, /api/reset, /api/health) that the
-   chat UI talks to.
-3. Serves the chat UI itself (static/index.html) at "/".
+Endpoints:
+- POST /api/chat        {"question": "..."}      -> {"id": int, "answer": "..."}
+- POST /api/ocr         image file (upload)       -> {"text": "..."}
+(voice query runs entirely in the browser via the Web Speech API - no
+server endpoint needed for it)
+- GET  /api/report/{id} builds+downloads a PDF for a past answer
+- POST /api/reset       clears chat history
+- GET  /api/health      {"ready": true|false}
+- GET  /                the chat UI (static/index.html)
 """
 
+import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from .monitoring import setup_langsmith
 from .orchestrator import Orchestrator
+from .agents.image_to_text_feature import OCRAgent
 
-# Holds the single Orchestrator instance once it's built. A plain dict
-# (rather than a global variable) so it's easy to reference from the
-# lifespan function and the route handlers below.
+REPORTS_DIR = "reports"
+os.makedirs(REPORTS_DIR, exist_ok=True)
+
+# Holds the single Orchestrator instance once it's built (heavy - loads
+# the embedding + reranker models, so this only happens once, at startup).
 state = {"orchestrator": None}
+
+# Lightweight agent - just a thin wrapper around Tesseract, no heavy model
+# loading, so it's fine to create right away instead of waiting for lifespan.
+ocr_agent = OCRAgent()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    setup_langsmith()
     print("🔄 Loading models and building the Orchestrator (this can take a minute)...")
     state["orchestrator"] = Orchestrator()
     print("✅ Orchestrator ready — the API can now take questions.")
@@ -41,9 +53,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Multi-Agent RAG Document Analyzer", lifespan=lifespan)
 
-# Same-origin in normal use (the UI is served by this same app), but this
-# keeps things working if you ever open the UI from a different port/host
-# during development.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -57,7 +66,12 @@ class ChatRequest(BaseModel):
 
 
 class ChatResponse(BaseModel):
+    id: int
     answer: str
+
+
+class TextResponse(BaseModel):
+    text: str
 
 
 def get_orchestrator() -> Orchestrator:
@@ -74,8 +88,34 @@ def chat(payload: ChatRequest):
         raise HTTPException(status_code=400, detail="Question can't be empty.")
 
     orchestrator = get_orchestrator()
-    answer = orchestrator.handle_question(question)
-    return ChatResponse(answer=answer)
+    result = orchestrator.handle_question(question)
+    return ChatResponse(**result)
+
+
+@app.post("/api/ocr", response_model=TextResponse)
+async def ocr(image: UploadFile = File(...)):
+    image_bytes = await image.read()
+    if not image_bytes:
+        raise HTTPException(status_code=400, detail="Empty image file.")
+
+    try:
+        text = ocr_agent.extract_text(image_bytes)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"OCR failed: {e}")
+
+    return TextResponse(text=text)
+
+
+@app.get("/api/report/{entry_id}")
+def report(entry_id: int):
+    orchestrator = get_orchestrator()
+    output_path = os.path.join(REPORTS_DIR, f"report_{entry_id}.pdf")
+
+    result = orchestrator.generate_report(entry_id, output_path)
+    if result is None:
+        raise HTTPException(status_code=404, detail="No answer found with that id.")
+
+    return FileResponse(output_path, media_type="application/pdf", filename=f"report_{entry_id}.pdf")
 
 
 @app.post("/api/reset")
@@ -90,7 +130,6 @@ def health():
     return {"ready": state["orchestrator"] is not None}
 
 
-# Static assets (the UI's own JS/CSS, if you split them out later).
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
